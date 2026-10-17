@@ -33,29 +33,41 @@ func FetchAll(feeds []models.Feed) ([]models.FeedWithItems, map[string][]models.
 				return
 			}
 
-			var items []models.FeedItem
-			for _, item := range parsed.Items {
-				thumbnailUrl := extractThumbnail(item)
-				if thumbnailUrl == "" && strings.Contains(f.Url, "techcrunch.com") {
-					thumbnailUrl = getTechCrunchThumbnail(item.Link, client)
-				}
+			items := make([]models.FeedItem, len(parsed.Items))
+			var itemWg sync.WaitGroup
 
-				items = append(items, models.FeedItem{
-					Title: item.Title,
-					Link: item.Link,
+			for idx, item := range parsed.Items {
+				items[idx] = models.FeedItem{
+					Title:       item.Title,
+					Link:        item.Link,
 					PublishedAt: item.Published,
 					Description: item.Description,
-					Categories: item.Categories,
-					Content: item.Content,
-					Author: item.Author,
-					ThumbnailUrl: thumbnailUrl,
-					GUID: item.GUID,
-				})
+					Categories:  item.Categories,
+					Content:      item.Content,
+					Author:       item.Author,
+					GUID:         item.GUID,
+				}
+
+				thumb := extractThumbnail(item)
+				if thumb != "" {
+					items[idx].ThumbnailUrl = thumb
+					continue
+				}
+
+				if strings.Contains(f.Url, "techcrunch.com") {
+					itemWg.Add(1)
+					go func(targetIdx int, link string) {
+						defer itemWg.Done()
+						items[targetIdx].ThumbnailUrl = getTechCrunchThumbnail(link, client)
+					}(idx, item.Link)
+				}
 			}
+
+			itemWg.Wait()
 
 			mu.Lock()
 			results[i] = models.FeedWithItems{
-				Feed: f,
+				Feed:  f,
 				Items: items,
 			}
 			feedMap[f.Name] = items

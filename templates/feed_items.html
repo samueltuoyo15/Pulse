@@ -10,22 +10,20 @@
         {{ end }}
 
         <div class="p-4 flex flex-col flex-grow">
-          <div class="flex items-center gap-2 mb-3">
+          <div class="flex items-center justify-between mb-3">
             {{ if .Categories }}
               <span class="bg-amber-200 text-amber-900 text-xs font-semibold px-2 py-1 rounded-full">
                 {{ index .Categories 0 }}
               </span>
             {{ end }}
 
-            <time class="text-xs italic text-gray-400">
+            <time class="text-xs italic text-gray-400 ml-auto">
               {{ if .PublishedAt }}
                 {{ formatDate .PublishedAt }}
               {{ else }}
                 Unknown date
               {{ end }}
             </time>
-
-            <span class="text-xs text-gray-400 ml-auto font-medium">{{ .Title }}</span>
           </div>
 
           <h2 class="text-base sm:text-lg font-bold text-white hover:text-amber-400 transition-colors leading-snug">

@@ -1,139 +1,286 @@
-# **RSS Feed Aggregator: Your Curated News Hub**
+# Pulse
 
-Dive into a seamless news experience with the **RSS Feed Aggregator**! This project is a lean, mean, and efficient Go application designed to fetch and display RSS/Atom feeds from various sources in one convenient place. Built with performance in mind and featuring a clean web interface powered by HTMX, it's perfect for staying on top of your favorite content without the clutter. ✨
+A lightweight, multi-instance RSS feed aggregator that pulls content from configured sources, caches it, and serves it through a clean web interface or a JSON API. It's built for developers who want a fast, simple way to collect and display news feeds without unnecessary complexity.
+
+## Overview
+
+Aggregates and displays RSS feeds from various sources in a clean, readable format. Stay updated with the latest news from TechCrunch, BBC News, and more! No bloat, no ads, just the content you care about.
+
+## System Architecture
+
+```mermaid
+flowchart LR
+    User["Web User"]
+    Browser["Browser"]
+    GoApp["Go Server"]
+    Cache["In-Memory Cache"]
+    RSS["RSS Sources"]
+    Static["Static Assets"]
+
+    User --> Browser
+    Browser --> GoApp
+    GoApp --> Cache
+    GoApp --> RSS
+    GoApp --> Static
+
+    style User fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff
+    style Browser fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff
+    style GoApp fill:#2e1065,stroke:#8b5cf6,stroke-width:2px,color:#fff
+    style Cache fill:#4c0519,stroke:#ef4444,stroke-width:2px,color:#fff
+    style RSS fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fff
+    style Static fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff
+```
+
+## Features
+
+### Parallel Feed Fetching
+
+Pulse fetches every configured RSS feed at the same time using goroutines. It also scrapes article pages for missing thumbnails when needed, so the reader always looks polished.
+
+```mermaid
+sequenceDiagram
+    actor Server
+    participant Parser as "Feed Parser"
+    participant FeedA as "Feed A"
+    participant FeedB as "Feed B"
+    participant TechCrunch as "TechCrunch Article"
+
+    Server->>Parser: Start parallel fetch
+    Parser->>FeedA: Request RSS
+    Parser->>FeedB: Request RSS
+    FeedA-->>Parser: Return items
+    FeedB-->>Parser: Return items
+    Parser->>TechCrunch: Scrape thumbnail
+    TechCrunch-->>Parser: Return image URL
+    Parser-->>Server: Return merged feeds
+```
+
+### Smart Caching with Warm Startup
+
+Feeds are cached in memory for 15 minutes. On startup, Pulse warms the cache immediately so the first visitor never waits.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Server
+    participant Cache
+    participant Fetcher
+
+    User->>Server: Request feeds
+    Server->>Cache: Check cache
+    alt Cache miss
+        Cache->>Fetcher: Fetch fresh feeds
+        Fetcher-->>Cache: Store results
+    end
+    Cache-->>Server: Return cached feeds
+    Server-->>User: Render response
+```
+
+### HTMX-Powered Reader
+
+The frontend loads feed cards without a full page refresh. When the browser requests `/api/feeds` with an HTMX header, the server returns an HTML partial instead of raw JSON.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Browser
+    participant Server
+    participant Cache
+
+    User->>Browser: Open Pulse
+    Browser->>Server: GET /api/feeds with HX-Request
+    Server->>Cache: Get feeds
+    Cache-->>Server: Return data
+    Server-->>Browser: Return HTML partial
+    Browser->>User: Display article cards
+```
+
+### Multi-Instance Docker Deployment
+
+The included Docker Compose file spins up three independent instances on different ports. Each instance knows its own name through an environment variable, which is useful for logs or load-balanced setups.
+
+```mermaid
+flowchart LR
+    LB["Load Balancer"]
+    I1["Instance 1"]
+    I2["Instance 2"]
+    I3["Instance 3"]
+
+    LB --> I1
+    LB --> I2
+    LB --> I3
+
+    style LB fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff
+    style I1 fill:#2e1065,stroke:#8b5cf6,stroke-width:2px,color:#fff
+    style I2 fill:#2e1065,stroke:#8b5cf6,stroke-width:2px,color:#fff
+    style I3 fill:#2e1065,stroke:#8b5cf6,stroke-width:2px,color:#fff
+```
 
 ## Installation
 
-Getting this aggregator up and running on your local machine is straightforward. You have a couple of options: directly using Go or leveraging Docker for containerization.
-
-### Prerequisites
-
-*   **Go**: Version 1.24.2 or newer
-*   **Git**: For cloning the repository
-*   **Docker (Optional)**: If you prefer to run it in a container
-
-### Clone the Repository
-
-First things first, grab the code:
+1. Clone the repository:
 
 ```bash
-git clone https://github.com/samueltuoyo15/Rss-Feed-Aggregator.git
+git clone git@github.com:samueltuoyo15/Rss-Feed-Aggregator.git
 cd Rss-Feed-Aggregator
 ```
 
-### Option 1: Running with Go
+2. Make sure you have Go 1.24.2 installed.
 
-Follow these steps to run the application directly using your Go installation:
+3. Download dependencies:
 
-1.  📦 **Download Dependencies**:
-    ```bash
-    go mod download
-    ```
-2.  🛠️ **Build the Application**:
-    ```bash
-    go build -o main ./cmd/main.go
-    ```
-3.  🚀 **Run the Application**:
-    ```bash
-    ./main
-    ```
+```bash
+go mod download
+```
 
-The server will start on `http://localhost:8080`.
-
-### Option 2: Running with Docker
-
-For a more isolated and portable setup, Docker is your friend:
-
-1.  🐳 **Build the Docker Image**:
-    ```bash
-    docker build -t rss-feed-aggregator .
-    ```
-2.  🚀 **Run the Docker Container**:
-    ```bash
-    docker run -p 8080:8080 rss-feed-aggregator
-    ```
-
-The application will now be accessible via `http://localhost:8080` in your browser.
-
-## Usage
-
-Once the server is running (either via Go or Docker), you can interact with the RSS Feed Aggregator in a couple of ways:
-
-### Web Interface
-
-Open your web browser and navigate to `http://localhost:8080`. You'll be greeted by the main page, which automatically fetches and displays the latest articles from the configured RSS feeds. The UI is designed to be responsive, providing a clean reading experience across different devices.
-
-The feed items are loaded using HTMX, providing a snappy, dynamic feel without full page reloads.
-
-### Configuration
-
-The RSS feeds are configured via a YAML file located at `config/feeds.yaml`. You can easily add or remove feeds by editing this file.
-
-Here's an example of the configuration structure:
+4. Create a `config/feeds.yaml` file with your RSS sources:
 
 ```yaml
 feeds:
   - name: "TechCrunch"
     url: "https://techcrunch.com/feed/"
-  - name: "BBC News"
-    url: "http://feeds.bbci.co.uk/news/rss.xml"
-  - name: "BBC Sport - Football"
-    url: "http://feeds.bbci.co.uk/sport/football/rss.xml"
+  - name: "The Verge"
+    url: "https://www.theverge.com/rss/index.xml"
 ```
 
-After modifying `config/feeds.yaml`, you'll need to restart the application for the changes to take effect.
+5. Run the server:
 
-### API Endpoint
-
-The aggregator also exposes a simple API endpoint for programmatically accessing the aggregated feeds:
-
-*   **GET `/api/feeds`**: Returns a JSON array of all fetched feeds and their respective items. This is what the web interface uses under the hood for initial data and subsequent updates.
-
-Example cURL request:
 ```bash
-curl http://localhost:8080/api/feeds
+go run main.go
 ```
 
-## Features
+The app will start on port 5000.
 
-*   📰 **Multi-Source Feed Aggregation**: Consolidates articles from multiple RSS/Atom feeds into a single, unified view.
-*   🚀 **Efficient Fetching**: Utilizes Go's concurrency features to fetch feeds in parallel, ensuring quick updates.
-*   🖼️ **Intelligent Thumbnail Extraction**: Beyond standard RSS enclosures, it includes custom logic to extract featured images from linked articles (e.g., TechCrunch).
-*   ⚙️ **YAML-based Configuration**: Easily add, remove, or modify feed sources by editing a simple `feeds.yaml` file.
-*   🌐 **Modern Web Interface**: A clean and responsive user interface built with HTML templates, HTMX for dynamic content loading, and Tailwind CSS for styling.
-*   💡 **Custom Template Functions**: Includes handy functions for date formatting and content truncation to present information neatly.
-*   📦 **Docker Support**: Provided `Dockerfile` for easy containerization and deployment.
-*   📡 **RESTful API**: Exposes a `/api/feeds` endpoint for consuming the aggregated data programmatically.
+### Docker Setup
+
+To run multiple instances locally:
+
+```bash
+docker-compose up --build
+```
+
+This starts three instances on ports 5001, 5002, and 5003.
+
+## Usage
+
+Open your browser and go to:
+
+```bash
+http://localhost:5000
+```
+
+The homepage loads feed cards automatically. If you want raw JSON instead of HTML, request the API directly:
+
+```bash
+curl http://localhost:5000/api/feeds
+```
+
+For an HTML partial that matches the frontend, add the HTMX request header:
+
+```bash
+curl -H "HX-Request: true" http://localhost:5000/api/feeds
+```
+
+## API Documentation
+
+### GET /
+
+**Description**: Serves the main Pulse reader page.
+
+**Request**: No parameters required.
+
+**Response**: Returns `text/html` containing the Tailwind-styled reader interface.
+
+**Errors**:
+- 500: Internal server error while rendering the homepage template.
+
+### GET /api/feeds
+
+**Description**: Returns the aggregated feed data. Returns JSON by default, or an HTML partial when requested via HTMX.
+
+**Request**:
+```bash
+curl http://localhost:5000/api/feeds
+```
+
+Optional header:
+```text
+HX-Request: true
+```
+
+**Response (JSON)**:
+```json
+[
+  {
+    "Feed": {
+      "name": "TechCrunch",
+      "url": "https://techcrunch.com/feed/"
+    },
+    "Items": [
+      {
+        "title": "Sample Article",
+        "link": "https://techcrunch.com/sample",
+        "published": "Mon, 01 Jan 2024 12:00:00 GMT",
+        "description": "A short summary.",
+        "categories": ["Startups"],
+        "content": "Full article content...",
+        "author": null,
+        "thumbnail_url": "https://example.com/image.jpg",
+        "guid": "abc123"
+      }
+    ]
+  }
+]
+```
+
+**Response (HTML partial)**: Rendered `templates/feed_items.html` containing the article card grid.
+
+**Errors**:
+- 500: Failed to load or fetch feeds.
+
+### Static Files
+
+**Description**: Serves files from the `static/` directory under `/static/`.
+
+**Request**:
+```bash
+curl http://localhost:5000/static/sitemap.xml
+```
+
+**Response**: Returns the requested static file.
+
+## Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `INSTANCE_NAME` | Name of the running instance, useful for multi-instance logs and deployments. | `instance1` |
 
 ## Technologies Used
 
-| Category   | Technology     | Description                                                                     |
-| :--------- | :------------- | :------------------------------------------------------------------------------ |
-| **Backend**  | [Go](https://go.dev/)          | The primary language for the server-side logic, chosen for its concurrency and performance. |
-| **Libraries**| [gofeed](https://github.com/mmcdole/gofeed) | Robust RSS/Atom feed parsing library.                                           |
-|            | [goquery](https://github.com/PuerkitoBio/goquery) | A Go library that brings jQuery-like syntax to Go for HTML parsing (used for thumbnail extraction). |
-|            | [yaml.v3](https://github.com/go-yaml/yaml) | Handles YAML file parsing for feed configuration.                               |
-| **Frontend** | [HTMX](https://htmx.org/)      | A lightweight JavaScript library for dynamic UI updates via HTML attributes.    |
-|            | [Tailwind CSS](https://tailwindcss.com/) | A utility-first CSS framework for rapid and consistent styling.                 |
-| **Containerization**| [Docker](https://www.docker.com/) | For building and running the application in isolated containers.              |
+| Technology | Purpose |
+|------------|---------|
+| [Go](https://go.dev/) | Backend server and feed fetching |
+| [gofeed](https://github.com/mmcdole/gofeed) | RSS and Atom feed parsing |
+| [goquery](https://github.com/PuerkitoBio/goquery) | HTML scraping for thumbnails |
+| [HTMX](https://htmx.org/) | Dynamic frontend updates without page reloads |
+| [Tailwind CSS](https://tailwindcss.com/) | Styling for the reader interface |
+| [Docker](https://www.docker.com/) | Multi-instance containerized deployment |
 
-## License
+## Contributing
 
-This project is open-source and released under an [MIT License](https://opensource.org/licenses/MIT).
+Contributions are welcome. If you want to add a feature or fix a bug, feel free to open an issue or pull request. Please keep changes focused and include a clear description of what you're changing.
 
 ## Author
 
-**Samuel Tuoyo**
+- LinkedIn: [Samuel Tuoyo](https://linkedin.com/in/samueltuoyo)
+- X: [@TuoyoS26091](https://x.com/TuoyoS26091)
+- GitHub: [samueltuoyo15](https://github.com/samueltuoyo15)
 
-A passionate developer with a keen interest in building efficient and scalable applications.
+## Badges
 
-* [X](https://x.com/TuoyoS26091)
+[![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![HTMX](https://img.shields.io/badge/HTMX-3366CC?style=for-the-badge&logo=htmx&logoColor=white)](https://htmx.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
----
-
-[![Go Version](https://img.shields.io/github/go-mod/go-version/samueltuoyo15/Rss-Feed-Aggregator?style=flat-square&color=00ADD8)](https://go.dev/)
-[![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/samueltuoyo15/rss-feed-aggregator/latest?style=flat-square&label=Docker%20Image&color=0db7ed)](https://hub.docker.com/r/samueltuoyo15/rss-feed-aggregator)
-[![Repository Stars](https://img.shields.io/github/stars/samueltuoyo15/Rss-Feed-Aggregator?style=flat-square&color=blue)](https://github.com/samueltuoyo15/Rss-Feed-Aggregator/stargazers)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-
-[![Readme was generated by Dokugen](https://img.shields.io/badge/Readme%20was%20generated%20by-Dokugen-brightgreen)](https://www.npmjs.com/package/dokugen)
+[![Readme was generated by Dokugen](https://img.shields.io/badge/Readme%20was%20generated%20by-Dokugen-brightgreen)](https://dokugen.samueltuoyo.com)

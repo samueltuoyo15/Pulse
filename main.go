@@ -9,25 +9,36 @@ import (
 	"os"
 	"time"
 
+	"github.com/samueltuoyo15/Rss-Feed-Aggregator/pkg/cache"
 	"github.com/samueltuoyo15/Rss-Feed-Aggregator/pkg/fetcher"
 	"github.com/samueltuoyo15/Rss-Feed-Aggregator/pkg/models"
 	"github.com/samueltuoyo15/Rss-Feed-Aggregator/pkg/parser"
 )
 
+var feedCache = cache.NewFeedCache(15 * time.Minute)
+
 type TemplateData struct {
 	Feeds []models.FeedWithItems
 }
 
-func feedFetcher(w http.ResponseWriter, r *http.Request) {
+func getFeeds() ([]models.FeedWithItems, error) {
 	feeds, err := parser.LoadFeeds("config/feeds.yaml")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to load Feeds: %v", err), http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("failed to load feeds: %w", err)
 	}
 
 	sortedResults, _, err := fetcher.FetchAll(feeds)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to fetch Feeds: %v", err), http.StatusInternalServerError)
+		return nil, fmt.Errorf("failed to fetch feeds: %w", err)
+	}
+
+	return sortedResults, nil
+}
+
+func feedFetcher(w http.ResponseWriter, r *http.Request) {
+	sortedResults, err := feedCache.GetOrFetch(getFeeds)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load feeds: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -92,6 +103,12 @@ func main() {
 
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/api/feeds", feedFetcher)
+
+	go func() {
+		if _, err := feedCache.GetOrFetch(getFeeds); err != nil {
+			log.Printf("Failed to warm feed cache on startup: %v", err)
+		}
+	}()
 
 	fmt.Printf(os.Getenv("INSTANCE_NAME") + " is running on port 5000\n")
 	if err := http.ListenAndServe(":5000", nil); err != nil {
